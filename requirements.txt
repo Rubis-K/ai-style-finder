@@ -1,0 +1,31 @@
+
+# Web interface
+gradio>=5.0.0
+
+# Data processing
+pandas>=2.0.0
+numpy>=1.26.0
+datasets>=3.0.0
+pyarrow>=17.0.0
+
+# Image processing
+Pillow>=10.0.0
+torch>=2.2.0
+torchvision>=0.17.0
+transformers>=5.0,<6
+huggingface-hub>=1.5,<2
+
+# Image similarity
+scikit-learn>=1.4.0
+
+# OpenAI API
+openai>=1.50.0
+
+# Environment variables
+python-dotenv>=1.0.0
+
+# HTTP requests
+requests>=2.31.0
+
+# Progress bars
+tqdm>=4.66.0

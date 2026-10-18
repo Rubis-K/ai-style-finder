@@ -1,0 +1,94 @@
+# Style Finder — image similarity + optional OpenAI fashion analysis
+
+A GitHub-friendly Python portfolio project. Upload a clothing photo and retrieve the five nearest visual product matches from the **Fashion Product Images (Small)** dataset. Optionally request a fashion description from the OpenAI API. **Search works without an API key.**
+
+## How it works
+
+1. Download up to 2,000 product images and metadata from Hugging Face.
+2. Generate **2,048-dimensional**, normalized ResNet50 penultimate-layer embeddings for each product image.
+3. Embed the image the user uploads with the *same* ResNet50 pipeline.
+4. Find the top five nearest products using cosine similarity (dot product of unit-normalized vectors).
+5. Optionally submit the uploaded image and candidate product metadata to an OpenAI vision model for a text analysis.
+
+No training is required. Products are nearest visual neighbors, **not guaranteed item matches**. The dataset has no reliable live product prices, stock or purchasing URLs. This is a portfolio demo, **not a shopping marketplace**.
+
+## Windows / VS Code setup (Python 3.11 recommended)
+
+In PowerShell in the project directory:
+
+```powershell
+py -3.11 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install --upgrade pip
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe scripts/download_dataset.py --limit 2000
+.\.venv\Scripts\python.exe scripts/build_embeddings.py
+.\.venv\Scripts\python.exe app.py
+```
+
+Open **http://127.0.0.1:5000** in your browser.
+
+Run all commands from the `style-finder-updated` project folder. Building embeddings may be slow on CPU and downloads pretrained ResNet50 weights once (~98 MB). A small initial experiment can use `--limit 100`, then rerun the downloader and embeddings builder with `--limit 2000`.
+
+If your VS Code interpreter says `ModuleNotFoundError: No module named 'datasets'`, select `.venv` under **Python: Select Interpreter**, or always run the full `.venv\Scripts\python.exe` commands above. `datasets` is included in `requirements.txt`.
+
+### macOS / Linux
+
+```bash
+python3.11 -m venv .venv
+.venv/bin/python -m pip install -r requirements.txt
+.venv/bin/python scripts/download_dataset.py --limit 2000
+.venv/bin/python scripts/build_embeddings.py
+.venv/bin/python app.py
+```
+
+## Optional OpenAI image analysis
+
+Copy `.env.example` to `.env` and add your own API key:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+```dotenv
+OPENAI_API_KEY=your_api_key_here
+OPENAI_MODEL=gpt-4.1-mini
+```
+
+Select **Add optional OpenAI style description** in the app. The OpenAI API is billed separately from ChatGPT and requires an enabled API project with model access. Do **not** commit `.env`.
+
+## Files
+
+```text
+style-finder-updated/
+├── app.py                         # Gradio interface and retrieval
+├── config.py                      # Paths and settings
+├── models/
+│   ├── image_processor.py         # ResNet50 image features
+│   └── llm_service.py             # Optional OpenAI Responses API
+├── scripts/
+│   ├── download_dataset.py        # Hugging Face streaming download
+│   └── build_embeddings.py        # Offline embedding generation
+├── data/                          # Generated at runtime; ignored by git
+├── requirements.txt
+├── .env.example
+└── .gitignore
+```
+
+## Data source and attribution
+
+Dataset: [ashraq/fashion-product-images-small](https://huggingface.co/datasets/ashraq/fashion-product-images-small) (44,072 original items). Its images and item metadata come from the [Fashion Product Images Kaggle dataset](https://www.kaggle.com/datasets/paramaggarwal/fashion-product-images-small). This project downloads a subset at setup time and does not redistribute the images. Check the original dataset/image licensing and terms before commercial use or redistribution.
+
+## Troubleshooting
+
+- `No module named datasets`: install via the project environment's `python -m pip install -r requirements.txt`.
+- Missing `data/products.csv` or `data/embeddings.npz`: run both scripts in order.
+- Torch/torchvision mismatch: recreate the virtual environment and reinstall dependencies; ensure a supported Python version.
+- OpenAI errors: search works without OpenAI; verify your key/model/billing if enabling AI descriptions.
+- Port 5000 busy: edit `server_port` in `app.py`.
+
+## Limitations / future improvements
+
+- ResNet50 embeddings are generic visual features; a fashion-specific embedding model could improve retrieval.
+- Matching whole images is not the same as segmenting individual garments.
+- Add evaluation examples and ranked retrieval metrics when ground-truth labels are available.
+- No item listings, real-time prices, purchasing links or inventory verification are provided.

@@ -1,0 +1,271 @@
+
+"""
+Fashion analysis service using OpenAI.
+"""
+
+import os
+import logging
+
+from dotenv import load_dotenv
+from openai import OpenAI
+
+load_dotenv()
+
+logger = logging.getLogger(__name__)
+
+
+class LlamaVisionService:
+    """
+    Fashion analysis using an OpenAI vision model.
+
+    Original class name retained for compatibility.
+    """
+
+    def __init__(
+        self,
+        model_id=None,
+        project_id=None,
+        region=None,
+        temperature=0.2,
+        top_p=0.6,
+        api_key=None,
+        max_tokens=2000
+    ):
+        
+        self.model_id = os.getenv(
+            "OPENAI_MODEL",
+            "gpt-6-luna"
+        )
+
+        self.max_tokens = max_tokens
+        self.reasoning_effort = "low"
+
+        key = api_key or os.getenv("OPENAI_API_KEY")
+
+        self.client = OpenAI(api_key=key) if key else None
+
+        if self.client is None:
+            logger.warning("OPENAI_API_KEY is missing.")
+
+    def generate_response(self, encoded_image, prompt):
+        """
+        Send an image and text instructions to OpenAI.
+        """
+
+        if self.client is None:
+            return "Error: OpenAI API key is missing."
+
+        try:
+            messages = [
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "type": "input_text",
+                            "text": prompt
+                        },
+                        {
+                            "type": "input_image",
+                            "image_url": (
+                                "data:image/jpeg;base64,"
+                                + encoded_image
+                            )
+                        }
+                    ]
+                }
+            ]
+
+            request = {
+                "model": self.model_id,
+                "input": messages,
+                "max_output_tokens": self.max_tokens
+            }
+
+            if self.model_id.startswith("gpt-6"):
+                request["reasoning"] = {
+                    "effort": self.reasoning_effort
+                }
+
+            response = self.client.responses.create(
+                **request
+            )
+
+            return response.output_text or ""
+
+        except Exception as e:
+            logger.exception("OpenAI request failed")
+            return f"Error generating response: {e}"
+
+    def generate_fashion_response(
+        self,
+        user_image_base64,
+        matched_row,
+        all_items,
+        similarity_score,
+        threshold=0.8
+    ):
+        """
+        Generate fashion analysis with matching products.
+        """
+
+        items_list = []
+
+        for _, row in all_items.iterrows():
+            name = row.get(
+                "Item Name",
+                row.get("name", "Unknown product")
+            )
+
+            price = row.get("Price")
+            link = row.get("Link")
+
+            item = str(name)
+
+            if price is not None:
+                item += f" (${price})"
+
+            if link is not None:
+                item += f": {link}"
+
+            items_list.append(item)
+
+        items_description = "\n".join(
+            f"- {item}" for item in items_list
+        )
+
+        is_strong_match = similarity_score >= threshold
+
+        section = (
+            "ITEM DETAILS:"
+            if is_strong_match
+            else "SIMILAR ITEMS:"
+        )
+
+        prompt = f"""
+You are a professional AI fashion stylist.
+
+Analyze the uploaded fashion image.
+
+Describe:
+1. Visible clothing items.
+2. Colors, patterns, and apparent materials.
+3. Overall fashion style.
+4. How the clothing items complement each other.
+5. Relevant products from the catalog.
+
+Catalog products:
+{items_description}
+
+Similarity classification:
+{"Strong visual match" if is_strong_match else "Approximate visual match"}
+
+Important:
+- Do not invent product prices or links.
+- Do not assume visually similar items are identical.
+- Use only provided catalog information.
+- Include a section titled {section}
+
+Provide a professional, readable response.
+"""
+
+        response = self.generate_response(
+            user_image_base64,
+            prompt
+        )
+
+        if response.startswith("Error"):
+            return response
+
+        if not response.strip():
+            response = "# Fashion Analysis\n\nNo analysis generated."
+
+        if (
+            "ITEM DETAILS:" not in response
+            and "SIMILAR ITEMS:" not in response
+        ):
+            response += (
+                f"\n\n{section}\n"
+                f"{items_description}"
+            )
+
+        return response
+
+
+
+def analyze_outfit(image, products: list[dict]) -> str:
+    """
+    Analyze an uploaded fashion image using OpenAI.
+
+    Args:
+        image: PIL Image uploaded through Gradio.
+        products: List of similar products from the dataset.
+
+    Returns:
+        Fashion analysis generated by OpenAI.
+    """
+    import base64
+    from io import BytesIO
+
+    # Initialize the service
+    service = LlamaVisionService()
+
+    if service.client is None:
+        return (
+            "AI analysis is unavailable because OPENAI_API_KEY "
+            "is missing. Product similarity search still works."
+        )
+
+    # Convert image into Base64
+    buffer = BytesIO()
+    image.convert("RGB").save(buffer, format="JPEG")
+
+    encoded_image = base64.b64encode(
+        buffer.getvalue()
+    ).decode("utf-8")
+
+    # Prepare retrieved product information
+    product_lines = []
+
+    for product in products:
+        name = product.get("name", "Unknown product")
+        category = product.get("category", "Unknown")
+        color = product.get("color", "Unknown")
+
+        product_lines.append(
+            f"- {name} | Category: {category} | Color: {color}"
+        )
+
+    catalog = "\n".join(product_lines)
+
+    # Create fashion analysis prompt
+    prompt = f"""
+You are a professional AI fashion stylist.
+
+Analyze the uploaded image and provide:
+
+1. Clothing identification:
+   Identify visible clothing items, colors, and patterns.
+
+2. Fashion style:
+   Describe the overall style of the outfit.
+
+3. Similar products:
+   Review the following retrieved products and explain
+   which ones resemble the uploaded image.
+
+4. Styling suggestions:
+   Recommend ways to complement the outfit.
+
+Retrieved products:
+{catalog}
+
+Important:
+- Do not invent prices, brands, or purchase links.
+- Retrieved products are visually similar, not exact matches.
+- Keep your response clear and professional.
+"""
+
+    return service.generate_response(
+        encoded_image=encoded_image,
+        prompt=prompt
+    )

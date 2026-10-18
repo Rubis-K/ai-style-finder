@@ -1,0 +1,35 @@
+
+# Python environment
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Downloaded datasets and embeddings
+data/images/
+data/products.csv
+data/embeddings.pkl
+data/*.pkl
+
+# Model weights and cache
+*.safetensors
+*.bin
+.cache/
+.huggingface/
+
+# Gradio
+.gradio/
+
+# IDE and OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
